@@ -13,20 +13,15 @@ require("dotenv").config();
 const NANGO_API_KEY = process.env.NANGO_API_KEY || "";
 
 // Validate API key
-if (!NANGO_API_KEY || NANGO_API_KEY === "") {
-  console.error(
-    "❌ ERROR: Please set your NANGO_API_KEY environment variable or update the code with your actual API key"
-  );
-  console.error(
-    "   You can get your API key from: https://app.nango.dev/environment-settings"
-  );
+if (!NANGO_API_KEY) {
+  console.error("❌ ERROR: Please set your NANGO_API_KEY environment variable");
   process.exit(1);
 }
 
 console.log("✅ Nango API Key loaded successfully");
 
 // Initialize Nango
-const nango = new Nango({ apiKey: NANGO_API_KEY });
+const nango = new Nango({ secretKey: NANGO_API_KEY });
 
 // Middleware
 app.use(cors());
@@ -43,13 +38,14 @@ app.post("/api/nango/session", async (req, res) => {
   try {
     const { userId } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({ error: "userId is required" });
+    if (!userId || typeof userId !== "string") {
+      return res
+        .status(400)
+        .json({ error: "userId is required and must be a string" });
     }
 
     // Create a session token for the user
     const sessionToken = await nango.createSessionToken(userId);
-
     res.json({ sessionToken });
   } catch (error) {
     console.error("Error creating session token:", error);
@@ -58,32 +54,49 @@ app.post("/api/nango/session", async (req, res) => {
 });
 
 // API endpoint to get connection details
-app.get("/api/nango/connection/:connectionId", async (req, res) => {
-  try {
-    const { connectionId } = req.params;
+app.get(
+  "/api/nango/connection/:integrationId/:connectionId",
+  async (req, res) => {
+    try {
+      const { integrationId, connectionId } = req.params;
 
-    // Get connection details
-    const connection = await nango.getConnection(connectionId);
+      // 🔒 Guard: ensure both are strings
+      if (!integrationId || typeof integrationId !== "string") {
+        return res
+          .status(400)
+          .json({ error: "integrationId is required and must be a string" });
+      }
+      if (!connectionId || typeof connectionId !== "string") {
+        return res
+          .status(400)
+          .json({ error: "connectionId is required and must be a string" });
+      }
 
-    res.json({ connection });
-  } catch (error) {
-    console.error("Error getting connection:", error);
-    res.status(500).json({ error: "Failed to get connection" });
+      // Get connection details
+      const connection = await nango.getConnection(integrationId, connectionId);
+      res.json({ connection });
+    } catch (error) {
+      console.error("Error getting connection:", error);
+      res.status(500).json({ error: "Failed to get connection" });
+    }
   }
-});
+);
 
 // API endpoint to list all connections for a user
 app.get("/api/nango/connections", async (req, res) => {
   try {
     const { userId } = req.query;
 
-    if (!userId) {
-      return res.status(400).json({ error: "userId is required" });
+    if (!userId || typeof userId !== "string") {
+      return res
+        .status(400)
+        .json({ error: "userId is required and must be a string" });
     }
 
-    // Get all connections for the user
+    // List connections by filtering on end_user.id
     const connections = await nango.listConnections({
-      connectionId: userId,
+      providerConfigKey: null, // optional: specify if you want only one integration
+      connectionId: userId, // this field is overloaded as end_user.id
     });
 
     res.json({ connections });
@@ -97,6 +110,18 @@ app.get("/api/nango/connections", async (req, res) => {
 app.get("/api/nango/token/:integrationId/:connectionId", async (req, res) => {
   try {
     const { integrationId, connectionId } = req.params;
+
+    // 🔒 Guard: ensure both are strings
+    if (!integrationId || typeof integrationId !== "string") {
+      return res
+        .status(400)
+        .json({ error: "integrationId is required and must be a string" });
+    }
+    if (!connectionId || typeof connectionId !== "string") {
+      return res
+        .status(400)
+        .json({ error: "connectionId is required and must be a string" });
+    }
 
     // Get the access token for the specific integration
     const token = await nango.getToken(integrationId, connectionId);
@@ -120,8 +145,19 @@ app.delete(
     try {
       const { integrationId, connectionId } = req.params;
 
-      await nango.deleteConnection(integrationId, connectionId);
+      // 🔒 Guard: ensure both are strings
+      if (!integrationId || typeof integrationId !== "string") {
+        return res
+          .status(400)
+          .json({ error: "integrationId is required and must be a string" });
+      }
+      if (!connectionId || typeof connectionId !== "string") {
+        return res
+          .status(400)
+          .json({ error: "connectionId is required and must be a string" });
+      }
 
+      await nango.deleteConnection(integrationId, connectionId);
       res.json({ message: "Connection deleted successfully" });
     } catch (error) {
       console.error("Error deleting connection:", error);
@@ -137,5 +173,4 @@ app.get("/health", (req, res) => {
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
-  console.log(`Make sure to set your NANGO_API_KEY environment variable`);
 });
