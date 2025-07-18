@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nango Sample App - API Tester</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        input {
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .response {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .success {
+            color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <h1>Nango Sample App - API Tester</h1>
+    
+    <div class="section">
+        <h2>Health Check</h2>
+        <button onclick="checkHealth()">Check Server Health</button>
+        <div id="health-response" class="response"></div>
+    </div>
+
+    <div class="section">
+        <h2>Session Token</h2>
+        <input type="text" id="userId" placeholder="Enter User ID" value="test-user-123">
+        <button onclick="createSession()">Create Session Token</button>
+        <div id="session-response" class="response"></div>
+    </div>
+
+    <div class="section">
+        <h2>List Connections</h2>
+        <input type="text" id="listUserId" placeholder="Enter User ID" value="test-user-123">
+        <button onclick="listConnections()">List Connections</button>
+        <div id="connections-response" class="response"></div>
+    </div>
+
+    <script>
+        async function makeRequest(url, options = {}) {
+            try {
+                const response = await fetch(url, options);
+                const data = await response.json();
+                return { success: response.ok, data, status: response.status };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+
+        async function checkHealth() {
+            const responseDiv = document.getElementById('health-response');
+            responseDiv.textContent = 'Loading...';
+            
+            const result = await makeRequest('/health');
+            
+            if (result.success) {
+                responseDiv.innerHTML = `<span class="success">✓ Server is healthy!</span>\n${JSON.stringify(result.data, null, 2)}`;
+            } else {
+                responseDiv.innerHTML = `<span class="error">✗ Error: ${result.error}</span>`;
+            }
+        }
+
+        async function createSession() {
+            const userId = document.getElementById('userId').value;
+            const responseDiv = document.getElementById('session-response');
+            
+            if (!userId) {
+                responseDiv.innerHTML = '<span class="error">Please enter a User ID</span>';
+                return;
+            }
+            
+            responseDiv.textContent = 'Loading...';
+            
+            const result = await makeRequest('/api/nango/session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ userId })
+            });
+            
+            if (result.success) {
+                responseDiv.innerHTML = `<span class="success">✓ Session endpoint called!</span>\n${JSON.stringify(result.data, null, 2)}`;
+            } else {
+                responseDiv.innerHTML = `<span class="error">✗ Error: ${result.data?.error || result.error}</span>`;
+            }
+        }
+
+        async function listConnections() {
+            const userId = document.getElementById('listUserId').value;
+            const responseDiv = document.getElementById('connections-response');
+            
+            if (!userId) {
+                responseDiv.innerHTML = '<span class="error">Please enter a User ID</span>';
+                return;
+            }
+            
+            responseDiv.textContent = 'Loading...';
+            
+            const result = await makeRequest(`/api/nango/connections?userId=${userId}`);
+            
+            if (result.success) {
+                responseDiv.innerHTML = `<span class="success">✓ Connections retrieved!</span>\n${JSON.stringify(result.data, null, 2)}`;
+            } else {
+                responseDiv.innerHTML = `<span class="error">✗ Error: ${result.data?.error || result.error}</span>`;
+            }
+        }
+
+        // Check health on page load
+        window.onload = () => {
+            checkHealth();
+        };
+    </script>
+</body>
+</html>
