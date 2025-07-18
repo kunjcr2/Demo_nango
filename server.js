@@ -26,7 +26,7 @@ if (!NANGO_API_KEY || NANGO_API_KEY === "") {
 console.log("✅ Nango API Key loaded successfully");
 
 // Initialize Nango
-const nango = new Nango({ apiKey: NANGO_API_KEY });
+const nango = new Nango({ secretKey: NANGO_API_KEY });
 
 // Middleware
 app.use(cors());
@@ -38,7 +38,8 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// API endpoint to get session token for Nango Connect
+// API endpoint to create a connection URL for Nango Connect
+// This is a placeholder for the frontend authentication flow
 app.post("/api/nango/session", async (req, res) => {
   try {
     const { userId } = req.body;
@@ -47,13 +48,23 @@ app.post("/api/nango/session", async (req, res) => {
       return res.status(400).json({ error: "userId is required" });
     }
 
-    // Create a session token for the user
-    const sessionToken = await nango.createSessionToken(userId);
-
-    res.json({ sessionToken });
+    // For frontend authentication flows, you typically need to:
+    // 1. Use Nango's hosted authentication page
+    // 2. Or implement the OAuth flow yourself
+    
+    // This is a mock response showing what would typically be returned
+    res.json({
+      message: "Session endpoint placeholder",
+      userId: userId,
+      note: "To implement OAuth flows, use Nango's hosted auth or implement OAuth directly",
+      nangoAuthUrl: `https://api.nango.dev/oauth/authorize?` +
+        `public_key=YOUR_PUBLIC_KEY&` +
+        `connection_id=${userId}&` +
+        `provider_config_key=YOUR_PROVIDER_CONFIG`
+    });
   } catch (error) {
-    console.error("Error creating session token:", error);
-    res.status(500).json({ error: "Failed to create session token" });
+    console.error("Error in session endpoint:", error);
+    res.status(500).json({ error: "Failed to process request" });
   }
 });
 
@@ -82,11 +93,10 @@ app.get("/api/nango/connections", async (req, res) => {
     }
 
     // Get all connections for the user
-    const connections = await nango.listConnections({
-      connectionId: userId,
-    });
+    // listConnections takes an optional connectionId parameter (not an object)
+    const result = await nango.listConnections(userId);
 
-    res.json({ connections });
+    res.json({ connections: result.connections });
   } catch (error) {
     console.error("Error listing connections:", error);
     res.status(500).json({ error: "Failed to list connections" });
