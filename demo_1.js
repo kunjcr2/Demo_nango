@@ -1,11 +1,20 @@
 // Configuration
+const prompt = require("prompt-sync")();
 const NANGO_BASE_URL = "https://api.nango.dev";
-const NANGO_SECRET_KEY =
-  process.env.NANGO_SECRET_KEY || "76f72c89-2cf7-42d3-b17a-0ff6bd2c8a7b";
-const CONNECTION_ID = "dbb84393-529b-4192-bc2c-b44778092674";
-const PROVIDER_CONFIG_KEY = "youtube";
+const NANGO_SECRET_KEY = process.env.NANGO_SECRET_KEY || "";
 
-console.log(NANGO_SECRET_KEY);
+const ids = {
+  slack: "ae5f9b84-c358-49df-841f-275796bb3f3d",
+  youtube: "dbb84393-529b-4192-bc2c-b44778092674",
+  gmail: "077b4d0c-77dc-48e7-a588-62d0d3244d90",
+  github: "074ddd0e-5305-437b-8779-4aa44abc52ee",
+};
+
+// Input from user
+const app_name = prompt("App name: ");
+
+const PROVIDER_CONFIG_KEY = app_name;
+const CONNECTION_ID = ids[PROVIDER_CONFIG_KEY];
 
 // Helper function to make authenticated requests to Nango
 async function makeNangoRequest(endpoint, options = {}) {
@@ -116,7 +125,7 @@ function generateAuthUrl() {
 // Usage examples
 async function main() {
   try {
-    const result = await listConnections(PROVIDER_CONFIG_KEY);
+    const result = await checkConnection(PROVIDER_CONFIG_KEY, CONNECTION_ID);
   } catch (error) {
     console.error("Main execution failed:", error.message);
   }

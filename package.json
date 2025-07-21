@@ -9,14 +9,20 @@
   },
   "dependencies": {
     "@nangohq/node": "^0.40.0",
-    "express": "^4.18.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "prompt-sync": "^4.2.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": ["nango", "oauth", "integration", "api"],
+  "keywords": [
+    "nango",
+    "oauth",
+    "integration",
+    "api"
+  ],
   "author": "Your Name",
   "license": "MIT"
 }
