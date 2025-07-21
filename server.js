@@ -10,7 +10,7 @@ const port = 5500;
 require("dotenv").config();
 
 // Environment variables
-const NANGO_API_KEY = process.env.NANGO_API_KEY || "";
+const NANGO_API_KEY = process.env.NANGO_SECRET_KEY || "";
 const NANGO_PUBLIC_KEY = process.env.NANGO_PUBLIC_KEY || "";
 
 // Validate required environment variables
