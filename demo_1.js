@@ -1,7 +1,8 @@
 // Configuration
 const prompt = require("prompt-sync")();
 const NANGO_BASE_URL = "https://api.nango.dev";
-const NANGO_SECRET_KEY = process.env.NANGO_SECRET_KEY || "";
+const NANGO_SECRET_KEY =
+  process.env.NANGO_SECRET_KEY || "";
 
 const ids = {
   slack: "ae5f9b84-c358-49df-841f-275796bb3f3d",

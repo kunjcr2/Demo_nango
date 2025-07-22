@@ -10,3 +10,5 @@ NANGO_PUBLIC_KEY=<NANGO_PUBLIC>
 ```
 
 demo_1.js WORKS.
+
+> Run server.js

@@ -1,361 +1,168 @@
+require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
-const path = require("path");
-const { Nango } = require("@nangohq/node");
+const bodyParser = require("body-parser");
+const axios = require("axios");
 
 const app = express();
-const port = 5500;
-
-// Load environment variables
-require("dotenv").config();
-
-// Environment variables
-const NANGO_API_KEY = process.env.NANGO_SECRET_KEY || "";
-const NANGO_PUBLIC_KEY = process.env.NANGO_PUBLIC_KEY || "";
-
-// Validate required environment variables
-if (!NANGO_API_KEY) {
-  console.error("❌ ERROR: Please set your NANGO_API_KEY environment variable");
-  process.exit(1);
-}
-
-if (!NANGO_PUBLIC_KEY) {
-  console.error(
-    "❌ ERROR: Please set your NANGO_PUBLIC_KEY environment variable"
-  );
-  process.exit(1);
-}
-
-console.log("✅ Nango API Key loaded successfully");
-console.log("✅ Nango Public Key loaded successfully");
-
-// Initialize Nango
-const nango = new Nango({ secretKey: NANGO_API_KEY });
+const port = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+app.use(bodyParser.json());
 
-// Serve the main HTML file
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+// Configuration
+const NANGO_BASE_URL = "https://api.nango.dev";
+const NANGO_SECRET_KEY =
+  process.env.NANGO_SECRET_KEY || "";
 
-// API endpoint to get public key for frontend
-app.get("/api/nango/public-key", (req, res) => {
-  res.json({ publicKey: NANGO_PUBLIC_KEY });
-});
+const ids = {
+  slack: "ae5f9b84-c358-49df-841f-275796bb3f3d",
+  youtube: "dbb84393-529b-4192-bc2c-b44778092674",
+  gmail: "077b4d0c-77dc-48e7-a588-62d0d3244d90",
+  github: "074ddd0e-5305-437b-8779-4aa44abc52ee",
+};
 
-// API endpoint to create a connection session token
-app.post("/api/nango/session", async (req, res) => {
+// Helper function to make authenticated requests to Nango using axios
+async function makeNangoRequest(endpoint, options = {}) {
+  const url = `${NANGO_BASE_URL}${endpoint}`;
+
   try {
-    const { userId, integrationId } = req.body;
+    const response = await axios({
+      url,
+      method: options.method || "get",
+      headers: {
+        Authorization: `Bearer ${NANGO_SECRET_KEY}`,
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+      data: options.body,
+    });
 
-    if (!userId || typeof userId !== "string") {
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw new Error(
+        `Nango API Error: ${error.response.status} - ${JSON.stringify(
+          error.response.data
+        )}`
+      );
+    }
+    throw error;
+  }
+}
+
+// Check if connection exists
+app.get("/check-connection", async (req, res) => {
+  try {
+    const { app_name } = req.query;
+
+    if (!app_name) {
       return res
         .status(400)
-        .json({ error: "userId is required and must be a string" });
+        .json({ error: "app_name query parameter is required" });
     }
 
-    if (!integrationId || typeof integrationId !== "string") {
-      return res
-        .status(400)
-        .json({ error: "integrationId is required and must be a string" });
+    const PROVIDER_CONFIG_KEY = app_name;
+    const CONNECTION_ID = ids[PROVIDER_CONFIG_KEY];
+
+    if (!CONNECTION_ID) {
+      return res.status(400).json({ error: "Invalid app name provided" });
     }
 
-    // Create a connection session token for the frontend
-    const sessionToken = await nango.createConnectionSessionToken(
-      userId,
-      integrationId
+    console.log("Checking connection...");
+    const data = await makeNangoRequest(
+      `/connection/${CONNECTION_ID}?provider_config_key=${PROVIDER_CONFIG_KEY}`
     );
 
-    res.json({
-      sessionToken: sessionToken.token,
-      userId: userId,
-      integrationId: integrationId,
-      message: "Session token created successfully",
-    });
+    console.log("Connection found:", data);
+    res.json({ success: true, token: data.credentials.access_token });
   } catch (error) {
-    console.error("Error creating session token:", error);
-    res.status(500).json({
-      error: "Failed to create session token",
-      details: error.message,
-    });
+    console.error("Connection check failed:", error.message);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// API endpoint to get connection details
-app.get(
-  "/api/nango/connection/:integrationId/:connectionId",
-  async (req, res) => {
-    try {
-      const { integrationId, connectionId } = req.params;
-
-      if (!integrationId || typeof integrationId !== "string") {
-        return res
-          .status(400)
-          .json({ error: "integrationId is required and must be a string" });
-      }
-      if (!connectionId || typeof connectionId !== "string") {
-        return res
-          .status(400)
-          .json({ error: "connectionId is required and must be a string" });
-      }
-
-      const connection = await nango.getConnection(integrationId, connectionId);
-      res.json({ connection });
-    } catch (error) {
-      console.error("Error getting connection:", error);
-      res.status(500).json({
-        error: "Failed to get connection",
-        details: error.message,
-      });
-    }
-  }
-);
-
-// API endpoint to list all connections for a user
-app.get("/api/nango/connections", async (req, res) => {
+// List all connections for a provider
+app.get("/list-connections", async (req, res) => {
   try {
-    const { userId } = req.query;
+    const { app_name } = req.query;
 
-    if (!userId || typeof userId !== "string") {
+    if (!app_name) {
       return res
         .status(400)
-        .json({ error: "userId is required and must be a string" });
+        .json({ error: "app_name query parameter is required" });
     }
 
-    // Get all connections for the user
-    const result = await nango.listConnections(userId);
+    const PROVIDER_CONFIG_KEY = app_name;
 
-    res.json({
-      connections: result.connections || [],
-      totalCount: result.connections?.length || 0,
-    });
-  } catch (error) {
-    console.error("Error listing connections:", error);
-    res.status(500).json({
-      error: "Failed to list connections",
-      details: error.message,
-    });
-  }
-});
-
-// API endpoint to get access token for a specific integration
-app.get("/api/nango/token/:integrationId/:connectionId", async (req, res) => {
-  try {
-    const { integrationId, connectionId } = req.params;
-    const { forceRefresh } = req.query;
-
-    if (!integrationId || typeof integrationId !== "string") {
-      return res
-        .status(400)
-        .json({ error: "integrationId is required and must be a string" });
-    }
-    if (!connectionId || typeof connectionId !== "string") {
-      return res
-        .status(400)
-        .json({ error: "connectionId is required and must be a string" });
-    }
-
-    // Get the access token for the specific integration
-    const token = await nango.getToken(
-      integrationId,
-      connectionId,
-      forceRefresh === "true"
+    console.log("Listing connections...");
+    const data = await makeNangoRequest(
+      `/connections?provider_config_key=${PROVIDER_CONFIG_KEY}`
     );
 
-    res.json({
-      accessToken: token.accessToken,
-      refreshToken: token.refreshToken,
-      expiresAt: token.expiresAt,
-      rawTokenResponse: token.rawTokenResponse,
-      integrationId,
-      connectionId,
-      retrievedAt: new Date().toISOString(),
-    });
+    console.log("Connections:", data);
+    res.json({ success: true, token: data.credentials.access_token });
   } catch (error) {
-    console.error("Error getting token:", error);
-    res.status(500).json({
-      error: "Failed to get access token",
-      details: error.message,
-    });
+    console.error("Failed to list connections:", error.message);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// API endpoint to get multiple access tokens at once
-app.post("/api/nango/tokens/batch", async (req, res) => {
+// Handle connection errors and attempt recovery
+app.post("/handle-connection-error", async (req, res) => {
   try {
-    const { connections } = req.body;
+    const { app_name } = req.body;
 
-    if (!Array.isArray(connections) || connections.length === 0) {
+    if (!app_name) {
       return res
         .status(400)
-        .json({ error: "connections array is required and must not be empty" });
+        .json({ error: "app_name is required in the request body" });
     }
 
-    const tokens = [];
-    const errors = [];
+    const PROVIDER_CONFIG_KEY = app_name;
 
-    for (const conn of connections) {
-      try {
-        const { integrationId, connectionId } = conn;
+    console.log("Attempting to recover from connection error...");
 
-        if (!integrationId || !connectionId) {
-          errors.push({
-            integrationId: integrationId || "unknown",
-            connectionId: connectionId || "unknown",
-            error: "Missing integrationId or connectionId",
-          });
-          continue;
-        }
+    // List all connections to see what's available
+    const connections = await makeNangoRequest(
+      `/connections?provider_config_key=${PROVIDER_CONFIG_KEY}`
+    );
 
-        const token = await nango.getToken(integrationId, connectionId);
-        tokens.push({
-          integrationId,
-          connectionId,
-          accessToken: token.accessToken,
-          refreshToken: token.refreshToken,
-          expiresAt: token.expiresAt,
-          retrievedAt: new Date().toISOString(),
-        });
-      } catch (error) {
-        errors.push({
-          integrationId: conn.integrationId || "unknown",
-          connectionId: conn.connectionId || "unknown",
-          error: error.message,
-        });
-      }
+    if (!connections || connections.length === 0) {
+      console.log("No valid connections found. User needs to authenticate.");
+      return res.json({
+        success: false,
+        error: "No valid connections. Please re-authenticate.",
+        authUrl: generateAuthUrl(PROVIDER_CONFIG_KEY),
+      });
     }
+
+    // Try using the first available connection
+    const validConnectionId = connections[0].connection_id;
+    console.log(`Retrying with connection: ${validConnectionId}`);
 
     res.json({
-      tokens,
-      errors,
-      totalRequested: connections.length,
-      successCount: tokens.length,
-      errorCount: errors.length,
+      success: true,
+      message: `Recovery attempted with connection: ${validConnectionId}`,
+      connectionId: validConnectionId,
     });
-  } catch (error) {
-    console.error("Error getting batch tokens:", error);
+  } catch (recoveryError) {
+    console.error("Recovery failed:", recoveryError.message);
     res.status(500).json({
-      error: "Failed to get batch tokens",
-      details: error.message,
+      success: false,
+      error: "Failed to recover connection. Please re-authenticate.",
+      authUrl: generateAuthUrl(req.body.app_name),
     });
   }
 });
 
-// API endpoint to delete a connection
-app.delete(
-  "/api/nango/connection/:integrationId/:connectionId",
-  async (req, res) => {
-    try {
-      const { integrationId, connectionId } = req.params;
+// Generate OAuth URL for re-authentication
+function generateAuthUrl(providerConfigKey) {
+  const publicKey = process.env.NANGO_PUBLIC_KEY || "default_public_key";
+  const newConnectionId = `user_${Date.now()}`;
+  return `https://api.nango.dev/oauth/connect/${publicKey}?config_key=${providerConfigKey}&connection_id=${newConnectionId}`;
+}
 
-      if (!integrationId || typeof integrationId !== "string") {
-        return res
-          .status(400)
-          .json({ error: "integrationId is required and must be a string" });
-      }
-      if (!connectionId || typeof connectionId !== "string") {
-        return res
-          .status(400)
-          .json({ error: "connectionId is required and must be a string" });
-      }
-
-      await nango.deleteConnection(integrationId, connectionId);
-      res.json({
-        message: "Connection deleted successfully",
-        integrationId,
-        connectionId,
-        deletedAt: new Date().toISOString(),
-      });
-    } catch (error) {
-      console.error("Error deleting connection:", error);
-      res.status(500).json({
-        error: "Failed to delete connection",
-        details: error.message,
-      });
-    }
-  }
-);
-
-// API endpoint to check connection status
-app.get(
-  "/api/nango/connection/:integrationId/:connectionId/status",
-  async (req, res) => {
-    try {
-      const { integrationId, connectionId } = req.params;
-
-      if (!integrationId || typeof integrationId !== "string") {
-        return res
-          .status(400)
-          .json({ error: "integrationId is required and must be a string" });
-      }
-      if (!connectionId || typeof connectionId !== "string") {
-        return res
-          .status(400)
-          .json({ error: "connectionId is required and must be a string" });
-      }
-
-      const connection = await nango.getConnection(integrationId, connectionId);
-
-      // Try to get token to verify connection is working
-      try {
-        const token = await nango.getToken(integrationId, connectionId);
-        res.json({
-          status: "active",
-          connection: connection,
-          hasValidToken: true,
-          checkedAt: new Date().toISOString(),
-        });
-      } catch (tokenError) {
-        res.json({
-          status: "inactive",
-          connection: connection,
-          hasValidToken: false,
-          error: tokenError.message,
-          checkedAt: new Date().toISOString(),
-        });
-      }
-    } catch (error) {
-      console.error("Error checking connection status:", error);
-      res.status(404).json({
-        status: "not_found",
-        error: "Connection not found",
-        details: error.message,
-      });
-    }
-  }
-);
-
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "OK",
-    timestamp: new Date().toISOString(),
-    nango: {
-      apiKeyConfigured: !!NANGO_API_KEY,
-      publicKeyConfigured: !!NANGO_PUBLIC_KEY,
-    },
-  });
-});
-
-// 404 handler for API routes
-app.use("/api", (req, res) => {
-  res.status(404).json({ error: "API endpoint not found" });
-});
-
-// Global error handler
-app.use((error, req, res, next) => {
-  console.error("Unhandled error:", error);
-  res.status(500).json({
-    error: "Internal server error",
-    details: error.message,
-  });
-});
-
+// Start the server
 app.listen(port, () => {
-  console.log(`🚀 Server running at http://localhost:${port}`);
-  console.log(`📋 API Documentation available at http://localhost:${port}`);
+  console.log(`Server running on port ${port}`);
 });
